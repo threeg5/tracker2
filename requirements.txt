@@ -1,7 +1,3 @@
-gspread
-oauth2client
 streamlit
+nba_api
 pandas
-plotly
-requests
-streamlit-autorefresh
