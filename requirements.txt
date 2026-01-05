@@ -1,0 +1,7 @@
+gspread
+oauth2client
+streamlit
+pandas
+plotly
+requests
+streamlit-autorefresh
