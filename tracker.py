@@ -16,7 +16,6 @@ def get_active_games():
         game_options = {}
         
         for game in games:
-            # Status 2 = Live, 1 = Starting Soon, 3 = Final
             status = game['gameStatus']
             if status >= 1: 
                 matchup = f"{game['awayTeam']['teamTricode']} @ {game['homeTeam']['teamTricode']}"
@@ -47,19 +46,28 @@ else:
     selected_game_id = active_games[selected_game_name]
 
 # --- MAIN DASHBOARD ---
-# Initialize session state to store history (so graph doesn't erase on update)
+# Initialize session state to store history
 if 'history' not in st.session_state:
     st.session_state.history = {'time': [], 'spread': [], 'home': [], 'away': []}
 
-# Placeholders for live updates
-header_metric = st.empty()
+# Layout: Creates 3 columns at the top for stats
+col1, col2, col3 = st.columns(3)
+metric_current = col1.empty()
+metric_high = col2.empty()
+metric_low = col3.empty()
+
+st.divider() # specific visual divider
+
+# Layout: Charts below
 chart_col1, chart_col2 = st.columns(2)
-spread_chart = chart_col1.empty()
-score_chart = chart_col2.empty()
+st.subheader("Live Spread History")
+spread_chart = st.empty()
+st.subheader("Score Pace")
+score_chart = st.empty()
 
 # --- LIVE LOOP ---
 if selected_game_name:
-    if st.button("Start Tracking (Stop with Stop Button)"):
+    if st.button("Start Tracking"):
         with st.empty():
             while True:
                 data = get_game_data(selected_game_id)
@@ -78,7 +86,11 @@ if selected_game_name:
                     st.session_state.history['home'].append(home_score)
                     st.session_state.history['away'].append(away_score)
                     
-                    # Create DataFrames for Charts
+                    # Calculate Stats
+                    current_high = max(st.session_state.history['spread'])
+                    current_low = min(st.session_state.history['spread'])
+
+                    # Create DataFrames
                     df_spread = pd.DataFrame({
                         'Spread': st.session_state.history['spread']
                     })
@@ -88,15 +100,25 @@ if selected_game_name:
                         away_team: st.session_state.history['away']
                     })
 
-                    # Render Dashboard
-                    header_metric.metric(
-                        label=f"{away_team} vs {home_team} ({status})", 
-                        value=f"Spread: {spread}",
-                        delta=f"Home Lead: {spread}"
+                    # Render Metrics (Top of Page)
+                    metric_current.metric(
+                        label=f"Current Spread ({home_team} vs {away_team})", 
+                        value=spread,
+                        delta=f"Game Status: {status}"
                     )
                     
-                    # We use Streamlit's native charts (interactive!)
+                    metric_high.metric(
+                        label=f"Highest Spread (Max {home_team} Lead)",
+                        value=current_high
+                    )
+                    
+                    metric_low.metric(
+                        label=f"Lowest Spread (Max {away_team} Lead)",
+                        value=current_low
+                    )
+
+                    # Render Charts
                     spread_chart.line_chart(df_spread)
                     score_chart.line_chart(df_scores)
 
-                time.sleep(3) # Wait 3 seconds
+                time.sleep(3)
