@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
-from nba_api.live.nba.endpoints import scoreboard
+from nba_api.live.nba.endpoints import scoreboard, playbyplay
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="The Rich Hits Tracker", layout="wide")
@@ -25,7 +25,7 @@ def get_active_games():
         return {}
 
 def get_game_data(game_id):
-    """Fetches single snapshot of data."""
+    """Fetches single snapshot of score data."""
     try:
         board = scoreboard.ScoreBoard()
         games = board.games.get_dict()
@@ -33,6 +33,28 @@ def get_game_data(game_id):
         return target
     except:
         return None
+
+def get_last_play_text(game_id):
+    """Fetches the text description of the very last play."""
+    try:
+        pbp = playbyplay.PlayByPlay(game_id)
+        actions = pbp.get_dict()['game']['actions']
+        if actions:
+            last_action = actions[-1]
+            # NBA APIs sometimes split text into 'descriptionHome' or 'descriptionAway'
+            # We want whichever one has text.
+            desc = last_action.get('description', '')
+            if not desc:
+                # Try specific home/away fields if main desc is empty
+                desc = last_action.get('descriptionHome') or last_action.get('descriptionAway') or "Play in progress..."
+            
+            # Add the clock time if available
+            clock = last_action.get('clock', '')
+            period = last_action.get('period', '')
+            return f"(Q{period} {clock}) {desc}"
+        return "Waiting for tip-off..."
+    except:
+        return "Loading play data..."
 
 # --- SIDEBAR SELECTION ---
 st.sidebar.header("Game Menu")
@@ -49,21 +71,31 @@ else:
 if 'history' not in st.session_state:
     st.session_state.history = {'time': [], 'spread': [], 'home': [], 'away': []}
 
-# Create 3 Columns for the Top Metrics
-col1, col2, col3 = st.columns(3)
+# LAYOUT UPDATE: Two Main Columns (Left for Stats, Right for Last Play)
+# The ratio [3, 1] means the stats take up 75% of the width, Last Play takes 25%
+main_col_left, main_col_right = st.columns([3, 1])
 
-# Column 1: Current Spread (Single Stat)
-metric_current = col1.empty()
+with main_col_left:
+    # Inside the left column, we nest our 3 stat columns
+    stat_col1, stat_col2, stat_col3 = st.columns(3)
+    
+    # 1. Current Spread
+    metric_current = stat_col1.empty()
+    
+    # 2. Highest Spread + Visiting Score
+    with stat_col2:
+        metric_high = st.empty()
+        metric_visit_score = st.empty()
 
-# Column 2: Highest Spread (Top) + Visiting Score (Bottom)
-with col2:
-    metric_high = st.empty()
-    metric_visit_score = st.empty() # Placeholder for Visiting Team Score
+    # 3. Lowest Spread + Home Score
+    with stat_col3:
+        metric_low = st.empty()
+        metric_home_score = st.empty()
 
-# Column 3: Lowest Spread (Top) + Home Score (Bottom)
-with col3:
-    metric_low = st.empty()
-    metric_home_score = st.empty() # Placeholder for Home Team Score
+with main_col_right:
+    # This is the new "Last Play" Box on the right
+    st.markdown("### ⚡ Last Play")
+    last_play_box = st.empty()
 
 st.divider()
 
@@ -79,7 +111,11 @@ if selected_game_name:
     if st.button("Start Tracking"):
         with st.empty():
             while True:
+                # 1. Get Scoreboard Data
                 data = get_game_data(selected_game_id)
+                
+                # 2. Get Last Play Data (New!)
+                play_text = get_last_play_text(selected_game_id)
                 
                 if data:
                     home_team = data['homeTeam']['teamTricode']
@@ -106,34 +142,34 @@ if selected_game_name:
                         away_team: st.session_state.history['away']
                     })
 
-                    # --- RENDER TOP METRICS ---
-                    
-                    # 1. Current Spread
+                    # --- RENDER STATS (LEFT) ---
                     metric_current.metric(
-                        label=f"Current Spread ({home_team} vs {away_team})", 
+                        label=f"Current ({home_team} vs {away_team})", 
                         value=spread,
                         delta=f"Status: {status}"
                     )
                     
-                    # 2. Highest Spread + Visiting Score
                     metric_high.metric(
-                        label=f"Highest Spread (Max {home_team} Lead)",
+                        label=f"High Spread ({home_team} Lead)",
                         value=current_high
                     )
                     metric_visit_score.metric(
-                        label=f"Visiting Score ({away_team})",
+                        label=f"{away_team} Score",
                         value=away_score
                     )
                     
-                    # 3. Lowest Spread + Home Score
                     metric_low.metric(
-                        label=f"Lowest Spread (Max {away_team} Lead)",
+                        label=f"Low Spread ({away_team} Lead)",
                         value=current_low
                     )
                     metric_home_score.metric(
-                        label=f"Home Score ({home_team})",
+                        label=f"{home_team} Score",
                         value=home_score
                     )
+
+                    # --- RENDER LAST PLAY (RIGHT) ---
+                    # We use a styled info box to make it pop
+                    last_play_box.info(f"{play_text}")
 
                     # --- RENDER CHARTS ---
                     spread_chart.line_chart(df_spread)
