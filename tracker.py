@@ -45,23 +45,32 @@ else:
     selected_game_name = st.sidebar.selectbox("Select a Game", list(active_games.keys()))
     selected_game_id = active_games[selected_game_name]
 
-# --- MAIN DASHBOARD ---
-# Initialize session state to store history
+# --- MAIN DASHBOARD LAYOUT ---
 if 'history' not in st.session_state:
     st.session_state.history = {'time': [], 'spread': [], 'home': [], 'away': []}
 
-# Layout: Creates 3 columns at the top for stats
+# Create 3 Columns for the Top Metrics
 col1, col2, col3 = st.columns(3)
+
+# Column 1: Current Spread (Single Stat)
 metric_current = col1.empty()
-metric_high = col2.empty()
-metric_low = col3.empty()
 
-st.divider() # specific visual divider
+# Column 2: Highest Spread (Top) + Visiting Score (Bottom)
+with col2:
+    metric_high = st.empty()
+    metric_visit_score = st.empty() # Placeholder for Visiting Team Score
 
-# Layout: Charts below
-chart_col1, chart_col2 = st.columns(2)
+# Column 3: Lowest Spread (Top) + Home Score (Bottom)
+with col3:
+    metric_low = st.empty()
+    metric_home_score = st.empty() # Placeholder for Home Team Score
+
+st.divider()
+
+# Charts below
 st.subheader("Live Spread History")
 spread_chart = st.empty()
+
 st.subheader("Score Pace")
 score_chart = st.empty()
 
@@ -90,34 +99,43 @@ if selected_game_name:
                     current_high = max(st.session_state.history['spread'])
                     current_low = min(st.session_state.history['spread'])
 
-                    # Create DataFrames
-                    df_spread = pd.DataFrame({
-                        'Spread': st.session_state.history['spread']
-                    })
-                    
+                    # DataFrames for Charts
+                    df_spread = pd.DataFrame({'Spread': st.session_state.history['spread']})
                     df_scores = pd.DataFrame({
                         home_team: st.session_state.history['home'],
                         away_team: st.session_state.history['away']
                     })
 
-                    # Render Metrics (Top of Page)
+                    # --- RENDER TOP METRICS ---
+                    
+                    # 1. Current Spread
                     metric_current.metric(
                         label=f"Current Spread ({home_team} vs {away_team})", 
                         value=spread,
-                        delta=f"Game Status: {status}"
+                        delta=f"Status: {status}"
                     )
                     
+                    # 2. Highest Spread + Visiting Score
                     metric_high.metric(
                         label=f"Highest Spread (Max {home_team} Lead)",
                         value=current_high
                     )
+                    metric_visit_score.metric(
+                        label=f"Visiting Score ({away_team})",
+                        value=away_score
+                    )
                     
+                    # 3. Lowest Spread + Home Score
                     metric_low.metric(
                         label=f"Lowest Spread (Max {away_team} Lead)",
                         value=current_low
                     )
+                    metric_home_score.metric(
+                        label=f"Home Score ({home_team})",
+                        value=home_score
+                    )
 
-                    # Render Charts
+                    # --- RENDER CHARTS ---
                     spread_chart.line_chart(df_spread)
                     score_chart.line_chart(df_scores)
 
